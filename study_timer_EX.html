@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>2分スタート</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface2: #e8e8ed;
+  --border: rgba(0,0,0,0.09);
+  --text: #1c1c1e;
+  --muted: rgba(60,60,67,0.5);
+  --accent: #7c6fff;
+  --accent2: #2ab8b0;
+  --green: #2d9e5f;
+  --green-dim: rgba(45,158,95,0.12);
+  --radius: 20px;
+  --radius-sm: 12px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  overscroll-behavior: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+}
+
+.app {
+  width: 100%;
+  max-width: 420px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 32px;
+}
+
+/* Header */
+.header {
+  padding: 20px 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.header-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.phase-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(124,111,255,0.15);
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  transition: all .4s;
+}
+.phase-badge.running { background: rgba(78,205,196,0.15); color: var(--accent2); }
+.phase-badge.done { background: var(--green-dim); color: var(--green); }
+
+/* Timer ring */
+.timer-section {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 24px;
+}
+
+.ring-wrap {
+  position: relative;
+  width: 240px;
+  height: 240px;
+}
+
+.ring-svg { transform: rotate(-90deg); }
+
+.ring-track {
+  fill: none;
+  stroke: #e8e8ed;
+  stroke-width: 10;
+}
+
+.ring-progress {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 659;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset .8s cubic-bezier(.4,0,.2,1), stroke .4s;
+}
+
+.ring-progress.running { stroke: var(--accent2); }
+.ring-progress.done { stroke: var(--green); }
+
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.timer-display {
+  font-family: 'DM Mono', monospace;
+  font-size: 56px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -2px;
+  line-height: 1;
+  transition: color .4s;
+}
+.timer-display.done { color: var(--green); }
+
+.timer-sub {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+
+/* Steps */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  transition: all .3s;
+}
+
+.step.active {
+  border-color: rgba(124,111,255,0.4);
+  background: rgba(124,111,255,0.06);
+}
+
+.step.done {
+  border-color: rgba(82,217,140,0.25);
+  background: var(--green-dim);
+}
+
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all .3s;
+}
+.step.active .step-num { background: var(--accent); color: #fff; }
+.step.done .step-num { background: var(--green); color: #fff; }
+
+.step-content { flex: 1; min-width: 0; }
+.step-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 1px;
+  transition: color .3s;
+}
+.step.done .step-title { color: var(--green); }
+.step-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  transition: opacity .3s;
+}
+.step:not(.active):not(.done) .step-desc { opacity: 0.6; }
+
+/* Task picker */
+.task-section {
+  margin-bottom: 20px;
+}
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+.task-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.task-chip {
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .2s;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.task-chip:active { transform: scale(0.95); }
+.task-chip.selected {
+  background: rgba(124,111,255,0.12);
+  border-color: rgba(124,111,255,0.4);
+  color: var(--accent);
+}
+
+.task-selected-label {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--accent);
+  display: none;
+  padding: 8px 12px;
+  background: rgba(124,111,255,0.08);
+  border-radius: var(--radius-sm);
+}
+.task-selected-label.show { display: block; }
+
+/* Buttons */
+.btn-main {
+  width: 100%;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Noto Sans JP', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--accent);
+  color: #fff;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.btn-main:active { transform: scale(0.97); }
+.btn-main.running { background: rgba(42,184,176,0.12); color: var(--accent2); border: 1px solid rgba(42,184,176,0.3); }
+.btn-main.done-state { background: var(--green); color: #fff; }
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+.btn-sub {
+  flex: 1;
+  padding: 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-sub:active { transform: scale(0.97); background: var(--surface2); }
+
+/* Done overlay */
+.done-card {
+  display: none;
+  margin-bottom: 20px;
+  padding: 18px;
+  background: var(--green-dim);
+  border: 1px solid rgba(45,158,95,0.3);
+  border-radius: var(--radius);
+  text-align: center;
+}
+.done-card.show { display: block; }
+.done-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 6px;
+}
+.done-desc {
+  font-size: 13px;
+  color: rgba(45,158,95,0.8);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.done-btns { display: flex; gap: 8px; }
+.done-btn {
+  flex: 1;
+  padding: 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(45,158,95,0.3);
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .2s;
+}
+.done-btn:active { transform: scale(0.97); background: rgba(45,158,95,0.1); }
+.done-btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+
+/* Pulse anim when running */
+@keyframes pulse-ring {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+.ring-progress.running { animation: pulse-ring 2s ease-in-out infinite; }
+
+/* Completion sparkle */
+@keyframes pop-in {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.done-card.show { animation: pop-in .4s cubic-bezier(.4,0,.2,1); }
+
+/* Vibration helper via CSS (visual feedback) */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <span class="header-title">タイマー</span>
+    <span class="phase-badge" id="phase-badge">準備中</span>
+  </div>
+
+  <div class="timer-section">
+    <div class="ring-wrap">
+      <svg class="ring-svg" width="240" height="240" viewBox="0 0 240 240">
+        <circle class="ring-track" cx="120" cy="120" r="105"/>
+        <circle class="ring-progress" id="ring" cx="120" cy="120" r="105"/>
+      </svg>
+      <div class="ring-center">
+        <div class="timer-display" id="timer">1:00</div>
+        <div class="timer-sub" id="timer-sub">タップしてスタート</div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-main" id="btn-main" onclick="handleMain()" style="margin-bottom:20px;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" id="btn-icon"><path d="M8 5v14l11-7z"/></svg>
+    <span id="btn-text">タイマー開始</span>
+  </button>
+
+  <div class="done-card" id="done-card">
+    <div class="done-title">完了！</div>
+    <div class="done-desc">「もう少しやれそう」と感じたら<br>それが作業興奮のサイン。続けよう。</div>
+    <div class="done-btns">
+      <button class="done-btn" onclick="resetAll()">リセット</button>
+      <button class="done-btn primary" onclick="continueStudy()">もう一回 →</button>
+    </div>
+  </div>
+
+  <div class="steps" id="steps">
+    <div class="step active" id="step-0">
+      <div class="step-num" id="snum-0">1</div>
+      <div class="step-content">
+        <div class="step-title">環境をセットする</div>
+        <div class="step-desc">教科書・ノート・ペンを机に出す。スマホは裏返す。</div>
+      </div>
+    </div>
+    <div class="step" id="step-1">
+      <div class="step-num" id="snum-1">2</div>
+      <div class="step-content">
+        <div class="step-title">「1問だけ」と決める</div>
+        <div class="step-desc">今日やることを1問・1ページに絞る。</div>
+      </div>
+    </div>
+    <div class="step" id="step-2">
+      <div class="step-num" id="snum-2">3</div>
+      <div class="step-content">
+        <div class="step-title">タイマーをスタート</div>
+        <div class="step-desc">「少しだけやる」と決めてボタンを押す。</div>
+      </div>
+    </div>
+    <div class="step" id="step-3">
+      <div class="step-num" id="snum-3">4</div>
+      <div class="step-content">
+        <div class="step-title">作業興奮を感じる</div>
+        <div class="step-desc">終わった後「続けたい」と感じたら成功。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="task-section">
+    <div class="section-label">タイマーの時間を選ぶ</div>
+    <div class="task-chips">
+      <div class="task-chip" id="chip-3" onclick="setDuration(3)">3分</div>
+      <div class="task-chip" id="chip-5" onclick="setDuration(5)">5分</div>
+      <div class="task-chip" id="chip-10" onclick="setDuration(10)">10分</div>
+      <div class="task-chip" id="chip-20" onclick="setDuration(20)">20分</div>
+      <div class="task-chip" id="chip-30" onclick="setDuration(30)">30分</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-sub" onclick="resetAll()">リセット</button>
+    <button class="btn-sub" onclick="addMinute()">+1分追加</button>
+  </div>
+
+</div>
+
+<script>
+let TOTAL = 60;
+let remaining = TOTAL, running = false, interval = null, currentStep = 0, finished = false;
+const CIRC = 2 * Math.PI * 105;
+let selectedMinutes = 1;
+
+function fmt(s) {
+  return Math.floor(s/60) + ':' + (s%60 < 10 ? '0' : '') + s%60;
+}
+
+function updateRing(s) {
+  const pct = s / TOTAL;
+  const offset = CIRC * (1 - pct);
+  document.getElementById('ring').style.strokeDashoffset = offset.toFixed(2);
+  document.getElementById('ring').style.strokeDasharray = CIRC.toFixed(2);
+  document.getElementById('timer').textContent = fmt(s);
+}
+
+function setStep(n) {
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('step-' + i);
+    const num = document.getElementById('snum-' + i);
+    el.classList.remove('active','done');
+    if (i < n) {
+      el.classList.add('done');
+      num.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+    } else if (i === n) {
+      el.classList.add('active');
+      num.textContent = i + 1;
+    } else {
+      num.textContent = i + 1;
+    }
+  }
+  const phases = ['準備中', '目標設定', 'タイマー中', '作業興奮へ'];
+  const badge = document.getElementById('phase-badge');
+  badge.textContent = phases[Math.min(n, 3)];
+  badge.className = 'phase-badge' + (n === 2 ? ' running' : n >= 3 ? ' done' : '');
+}
+
+function setDuration(min) {
+  if (running) return;
+  selectedMinutes = min;
+  TOTAL = min * 60;
+  remaining = TOTAL;
+  updateRing(TOTAL);
+  finished = false;
+  document.getElementById('timer-sub').textContent = 'タップしてスタート';
+  document.getElementById('timer').classList.remove('done');
+  document.getElementById('ring').style.stroke = '';
+  document.getElementById('ring').classList.remove('running', 'done');
+  document.getElementById('done-card').classList.remove('show');
+  document.getElementById('btn-main').style.display = '';
+  document.getElementById('btn-main').classList.remove('running', 'done-state');
+  document.getElementById('btn-icon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+  document.getElementById('btn-text').textContent = 'タイマー開始';
+  [3, 5, 10, 20, 30].forEach(m => {
+    const c = document.getElementById('chip-' + m);
+    if (c) c.classList.toggle('selected', m === min);
+  });
+  currentStep = 0;
+  setStep(0);
+}
+
+function handleMain() {
+  if (finished) { continueStudy(); return; }
+  if (!running) {
+    running = true;
+    if (currentStep < 2) currentStep = 2;
+    setStep(currentStep);
+    const ring = document.getElementById('ring');
+    ring.classList.add('running');
+    ring.classList.remove('done');
+    document.getElementById('timer').classList.remove('done');
+    document.getElementById('btn-main').classList.add('running');
+    document.getElementById('btn-icon').innerHTML = '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+    document.getElementById('btn-text').textContent = 'タップで一時停止';
+    document.getElementById('timer-sub').textContent = 'がんばれ！';
+    interval = setInterval(() => {
+      remaining--;
+      updateRing(remaining);
+      if (remaining <= 30) {
+        document.getElementById('ring').style.stroke = 'var(--green)';
+      }
+      if (remaining <= 0) {
+        clearInterval(interval);
+        running = false;
+        finish();
+      }
+    }, 1000);
+  } else {
+    clearInterval(interval);
+    running = false;
+    const ring = document.getElementById('ring');
+    ring.classList.remove('running');
+    document.getElementById('btn-main').classList.remove('running');
+    document.getElementById('btn-icon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+    document.getElementById('btn-text').textContent = 'タップで再開';
+    document.getElementById('timer-sub').textContent = '一時停止中';
+  }
+}
+
+function finish() {
+  finished = true;
+  setStep(3);
+  const ring = document.getElementById('ring');
+  ring.classList.remove('running');
+  ring.classList.add('done');
+  document.getElementById('timer').classList.add('done');
+  document.getElementById('done-card').classList.add('show');
+  document.getElementById('btn-main').style.display = 'none';
+  document.querySelector('.done-title').textContent = selectedMinutes+'分完了！';
+  document.getElementById('timer-sub').textContent = '完了！';
+  // vibrate if supported
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+}
+
+function continueStudy() {
+  finished = false;
+  remaining = TOTAL;
+  updateRing(TOTAL);
+  document.getElementById('done-card').classList.remove('show');
+  document.getElementById('btn-main').style.display = '';
+  document.getElementById('btn-main').classList.remove('running', 'done-state');
+  document.getElementById('btn-icon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+  document.getElementById('btn-text').textContent = 'タイマー開始';
+  const ring = document.getElementById('ring');
+  ring.classList.remove('done');
+  ring.style.stroke = '';
+  document.getElementById('timer').classList.remove('done');
+  document.getElementById('timer-sub').textContent = 'タップしてスタート';
+  currentStep = 2;
+  setStep(2);
+}
+
+function resetAll() {
+  clearInterval(interval);
+  running = false;
+  finished = false;
+  selectedMinutes = 1;
+  TOTAL = 60;
+  remaining = TOTAL;
+  updateRing(TOTAL);
+  [3,5,10,20,30].forEach(m => {
+    const c = document.getElementById('chip-'+m);
+    if(c) c.classList.remove('selected');
+  });
+  currentStep = 0;
+  setStep(0);
+  const ring = document.getElementById('ring');
+  ring.classList.remove('running','done');
+  ring.style.stroke = '';
+  document.getElementById('timer').classList.remove('done');
+  document.getElementById('done-card').classList.remove('show');
+  document.getElementById('btn-main').style.display = '';
+  document.getElementById('btn-main').classList.remove('running','done-state');
+  document.getElementById('btn-icon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+  document.getElementById('btn-text').textContent = '2分タイマーを開始';
+  document.getElementById('timer-sub').textContent = 'タップしてスタート';
+}
+
+function addMinute() {
+  remaining = remaining + 60;
+  TOTAL = Math.max(TOTAL, remaining);
+  selectedMinutes = Math.round(TOTAL / 60);
+  updateRing(remaining);
+}
+
+function selectTask(el, label) {
+  document.querySelectorAll('.task-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  const lbl = document.getElementById('task-label');
+  lbl.textContent = '今日の1問：' + label;
+  lbl.classList.add('show');
+  if (currentStep < 1) { currentStep = 1; setStep(1); }
+}
+
+// Init
+updateRing(TOTAL);
+selectedMinutes=1;
+document.getElementById('ring').style.strokeDasharray = CIRC.toFixed(2);
+document.getElementById('ring').style.strokeDashoffset = '0';
+</script>
+</body>
+</html>
