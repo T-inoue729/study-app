@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>積と和の10問タイムアタック（ギブアップ機能付き）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --success: #2a9d8f;
+            --danger: #e63946;
+            --warning: #f4a261;
+            --bg: #f4f7f6;
+        }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; background: var(--bg); margin: 0; padding: 10px; color: #333; }
+        .container { background: white; max-width: 450px; margin: 20px auto; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); position: relative; overflow: hidden; }
+        
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        h1 { font-size: 1.6rem; margin-bottom: 20px; color: #2c3e50; }
+        button.main-btn { font-size: 1.1rem; font-weight: bold; padding: 12px 30px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        button.main-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(74,144,226,0.3); }
+        
+        .select-box { margin: 25px 0; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 8px; }
+        .select-box label { display: block; margin: 15px 0; font-size: 1.1rem; cursor: pointer; }
+        .select-box input { margin-right: 10px; transform: scale(1.2); }
+
+        .status-bar { display: flex; justify-content: space-between; font-size: 1.1rem; color: #666; margin-bottom: 15px; font-weight: bold; }
+        #timer { font-family: monospace; font-size: 1.3rem; color: #333; }
+        .question { font-size: 2rem; font-weight: bold; margin: 15px 0; line-height: 1.5; }
+        
+        /* 入力表示エリア */
+        .display-area { display: flex; justify-content: center; align-items: center; margin: 15px 0; }
+        .input-box { font-size: 1.8rem; font-weight: bold; width: 90px; height: 50px; line-height: 50px; border: 2px solid #ccc; border-radius: 8px; margin: 0 10px; background: #fafafa; cursor: pointer; text-align: center; }
+        .input-box.active { border-color: var(--primary); background: #eef5fc; box-shadow: 0 0 8px rgba(74,144,226,0.3); }
+        .comma { font-size: 2rem; font-weight: bold; color: #888; }
+
+        /* テンキーのスタイル */
+        .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 320px; margin: 20px auto 0; }
+        .key { font-size: 1.5rem; font-weight: bold; padding: 15px 0; background: #ffffff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); user-select: none; -webkit-tap-highlight-color: transparent; }
+        .key:active { background: #e0e0e0; }
+        .key.action { background: #e9ecef; color: #495057; }
+        
+        /* パスボタンと決定ボタンの横並び */
+        .key.giveup { background: var(--warning); color: white; font-size: 1.1rem; padding: 12px 0; margin-top: 5px; }
+        .key.giveup:active { background: #d7894a; }
+        .key.submit { background: var(--success); color: white; grid-column: span 2; padding: 12px 0; font-size: 1.3rem; margin-top: 5px; }
+        .key.submit:active { background: #1d7267; }
+        
+        /* 演出エリア */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.3s ease-in-out; }
+
+        @keyframes popCircle {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+        .correct-mark { display: none; position: absolute; top: 40%; left: 50%; width: 120px; height: 120px; border: 15px solid var(--success); border-radius: 50%; pointer-events: none; z-index: 10; }
+        .correct-mark.animate { display: block; animation: popCircle 0.4s ease-out forwards; }
+
+        /* ギブアップ時の答え表示ボード */
+        .giveup-board { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 20; justify-content: center; align-items: center; flex-direction: column; }
+        .giveup-board.active { display: flex; }
+        .giveup-text { font-size: 1.8rem; font-weight: bold; color: var(--danger); margin: 10px; }
+
+        .result-time { font-size: 2.5rem; font-weight: bold; color: var(--success); margin: 20px 0; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="game-container">
+    <div class="correct-mark" id="correct-effect"></div>
+
+    <div class="giveup-board" id="giveup-screen">
+        <div style="font-size: 1.2rem; color: #666;">パスしました</div>
+        <div class="giveup-text" id="correct-answer-display">正解は ? と ?</div>
+    </div>
+
+    <div id="screen-start" class="screen active">
+        <h1>積と和の10問タイムアタック</h1>
+        <div class="select-box">
+            <strong style="font-size: 1.1rem; color: #444;">難易度を選択してください：</strong>
+            <label><input type="radio" name="level" value="easy" checked> 小学生レベル (1 〜 9 の正の数)</label>
+            <label><input type="radio" name="level" value="normal"> 中学生レベル (-9 〜 9 の整数)</label>
+            <label><input type="radio" name="level" value="hard"> 高校生レベル (-20 〜 20 の2桁含む整数)</label>
+        </div>
+        <button class="main-btn" onclick="startGame()">ゲームスタート！</button>
+    </div>
+
+    <div id="screen-game" class="screen">
+        <div class="status-bar">
+            <div>問: <span id="q-num">1</span> / 10</div>
+            <div id="timer">00:00.00</div>
+        </div>
+        <div class="question">
+            <div>積が <span id="val-product" style="color: var(--danger);">?</span></div>
+            <div>和が <span id="val-sum" style="color: var(--primary);">?</span></div>
+        </div>
+        
+        <div class="display-area">
+            <div id="box1" class="input-box active" onclick="switchBox(1)"></div>
+            <div class="comma">,</div>
+            <div id="box2" class="input-box" onclick="switchBox(2)"></div>
+        </div>
+
+        <div class="keypad">
+            <button class="key" onclick="pressNum(1)">1</button>
+            <button class="key" onclick="pressNum(2)">2</button>
+            <button class="key" onclick="pressNum(3)">3</button>
+            <button class="key" onclick="pressNum(4)">4</button>
+            <button class="key" onclick="pressNum(5)">5</button>
+            <button class="key" onclick="pressNum(6)">6</button>
+            <button class="key" onclick="pressNum(7)">7</button>
+            <button class="key" onclick="pressNum(8)">8</button>
+            <button class="key" onclick="pressNum(9)">9</button>
+            <button class="key action" onclick="pressMinus()">-</button>
+            <button class="key" onclick="pressNum(0)">0</button>
+            <button class="key action" onclick="pressClear()">⌫</button>
+            
+            <button class="key giveup" onclick="giveUp()">パス</button>
+            <button class="key submit" onclick="checkAnswer()">決定</button>
+        </div>
+    </div>
+
+    <div id="screen-result" class="screen">
+        <h1>🎉 クリア！🎉</h1>
+        <p style="font-size: 1.2rem; color: #666;">10問終了時のタイム：</p>
+        <div class="result-time" id="final-time">00:00.00</div>
+        <button class="main-btn" onclick="toStartScreen()">もう一度遊ぶ</button>
+    </div>
+</div>
+
+<script>
+    let currentQuestion = 1;
+    const totalQuestions = 10;
+    let ansA = 0, ansB = 0;
+    let selectedLevel = 'easy';
+    let isShowingAnswer = false; // 答え表示中に入力を受け付けないためのフラグ
+    
+    let activeBox = 1;
+    let val1 = "";
+    let val2 = "";
+
+    let startTime;
+    let timerInterval;
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    function playSound(type) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'correct') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, now);
+            gain.gain.setValueAtTime(0.2, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+            osc.start(now);
+            osc.stop(now + 0.35);
+        } else if (type === 'wrong') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(140, now);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+            osc.start(now);
+            osc.stop(now + 0.25);
+        } else if (type === 'giveup') {
+            // パス時の少し間の抜けた音（ププー）
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(220, now);
+            gain.gain.setValueAtTime(0.2, now);
+            osc.frequency.setValueAtTime(180, now + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            osc.start(now);
+            osc.stop(now + 0.4);
+        }
+    }
+
+    function changeScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    function startGame() {
+        initAudio();
+        selectedLevel = document.querySelector('input[name="level"]:checked').value;
+        currentQuestion = 1;
+        isShowingAnswer = false;
+        changeScreen('screen-game');
+        makeQuestion();
+
+        startTime = Date.now();
+        timerInterval = setInterval(updateTimer, 10);
+    }
+
+    function updateTimer() {
+        const diff = Date.now() - startTime;
+        document.getElementById('timer').textContent = formatTime(diff);
+    }
+
+    function formatTime(ms) {
+        const min = Math.floor(ms / 60000);
+        const sec = Math.floor((ms % 60000) / 1000);
+        const msec = Math.floor((ms % 1000) / 10);
+        return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + '.' + String(msec).padStart(2, '0');
+    }
+
+    function getRandomInt() {
+        let min, max;
+        if (selectedLevel === 'easy') { return Math.floor(Math.random() * 9) + 1; }
+        else if (selectedLevel === 'normal') { min = -9; max = 9; }
+        else { min = -20; max = 20; }
+
+        let num = 0;
+        while (num === 0) { num = Math.floor(Math.random() * (max - min + 1)) + min; }
+        return num;
+    }
+
+    function makeQuestion() {
+        if (currentQuestion > totalQuestions) {
+            clearInterval(timerInterval);
+            document.getElementById('final-time').textContent = document.getElementById('timer').textContent;
+            changeScreen('screen-result');
+            return;
+        }
+
+        document.getElementById('q-num').textContent = currentQuestion;
+        val1 = ""; val2 = "";
+        updateDisplay();
+        switchBox(1);
+
+        ansA = getRandomInt();
+        ansB = getRandomInt();
+        if(ansA === 1 && ansB === 1 && selectedLevel !== 'easy') { ansA = -2; }
+
+        document.getElementById('val-product').textContent = ansA * ansB;
+        document.getElementById('val-sum').textContent = ansA + ansB;
+    }
+
+    function switchBox(boxNum) {
+        if (isShowingAnswer) return;
+        activeBox = boxNum;
+        document.getElementById('box1').classList.toggle('active', boxNum === 1);
+        document.getElementById('box2').classList.toggle('active', boxNum === 2);
+    }
+
+    function pressNum(num) {
+        if (isShowingAnswer) return;
+        if (activeBox === 1) {
+            if (val1.length < 3) val1 += num;
+        } else {
+            if (val2.length < 3) val2 += num;
+        }
+        updateDisplay();
+    }
+
+    function pressMinus() {
+        if (isShowingAnswer) return;
+        if (activeBox === 1) {
+            if (val1 === "") val1 = "-";
+        } else {
+            if (val2 === "") val2 = "-";
+        }
+        updateDisplay();
+    }
+
+    function pressClear() {
+        if (isShowingAnswer) return;
+        if (activeBox === 1) {
+            val1 = val1.slice(0, -1);
+        } else {
+            val2 = val2.slice(0, -1);
+        }
+        updateDisplay();
+    }
+
+    function updateDisplay() {
+        document.getElementById('box1').textContent = val1;
+        document.getElementById('box2').textContent = val2;
+    }
+
+    function checkAnswer() {
+        if (isShowingAnswer) return;
+        const input1 = parseInt(val1);
+        const input2 = parseInt(val2);
+        const container = document.getElementById('game-container');
+        const effect = document.getElementById('correct-effect');
+
+        if (isNaN(input1) || isNaN(input2)) return;
+
+        if ((input1 === ansA && input2 === ansB) || (input1 === ansB && input2 === ansA)) {
+            playSound('correct');
+            effect.classList.add('animate');
+            currentQuestion++;
+            
+            setTimeout(() => {
+                effect.classList.remove('animate');
+                makeQuestion();
+            }, 300);
+        } else {
+            playSound('wrong');
+            container.classList.add('shake');
+            setTimeout(() => container.classList.remove('shake'), 300);
+        }
+    }
+
+    // --- ギブアップ（パス）処理 ---
+    function giveUp() {
+        if (isShowingAnswer) return;
+        isShowingAnswer = true;
+        
+        playSound('giveup');
+        
+        // 答えを表示用画面にセットして出現させる
+        document.getElementById('correct-answer-display').textContent = `正解は ${ansA} と ${ansB}`;
+        const giveupScreen = document.getElementById('giveup-screen');
+        giveupScreen.classList.add('active');
+        
+        currentQuestion++;
+
+        // 2秒間答えを見せたあとに、画面を戻して次の問題へ
+        setTimeout(() => {
+            giveupScreen.classList.remove('active');
+            isShowingAnswer = false;
+            makeQuestion();
+        }, 2000);
+    }
+
+    function toStartScreen() { changeScreen('screen-start'); }
+</script>
+
+</body>
+</html>
